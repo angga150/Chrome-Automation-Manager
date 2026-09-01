@@ -99,6 +99,60 @@ Proyek ini ditujukan untuk automation dan testing yang sah (mengendalikan browse
 
 **Phase 0 — Documentation & Architecture.** Belum ada implementasi kode; fondasi desain sedang difinalisasi sebelum development dimulai.
 
+## Phase 1 Progress Update
+
+### Status saat ini
+**Phase 1 — Chrome Launcher** telah dibangun dan divalidasi secara fungsional.
+
+Yang sudah berhasil dibuat:
+- `Profile Manager` untuk membuat direktori profile terisolasi per session
+- `Port Allocator` untuk memilih port Chrome debug yang tersedia
+- `Chrome Manager` untuk mengeksekusi `chrome.exe` dan menjalankan proses Chrome
+- `CLI` untuk menjalankan perintah `launch` dan `stop`
+- test otomatis untuk validasi core logic phase 1
+
+### Hasil yang sudah terbukti
+Berdasarkan eksekusi yang berhasil:
+- `npm test` -> 3 test pass, 0 fail
+- `npx tsx app/cli/index.ts launch demo-session 9222` -> Chrome berhasil diluncurkan dengan PID
+
+Output launch yang berhasil:
+
+```json
+{
+  "command": "launch",
+  "sessionId": "demo-session",
+  "profilePath": "C:\\laragon\\www\\Chrome-Automation-Manager\\data\\profiles\\demo-session",
+  "debugPort": 9222,
+  "pid": 7444
+}
+```
+
+### Acceptance Criteria Phase 1
+Status validasi:
+- [x] bisa meluncurkan Chrome dengan profile terisolasi
+- [x] bisa memilih port debug yang tersedia
+- [x] proses Chrome bisa dijalankan via CLI
+- [x] proses bisa dihentikan dengan perintah stop
+- [x] core logic telah lewat test otomatis
+
+### Bukti screenshot hasil berjalan
+
+![Hasil launch Chrome Phase 1](img/foto%20phase1.png)
+
+### Command yang bisa dipakai
+
+```powershell
+cd C:\laragon\www\Chrome-Automation-Manager
+npx tsx app/cli/index.ts launch demo-session 9222
+npx tsx app/cli/index.ts stop demo-session
+```
+
+### Catatan teknis
+- Path Chrome yang dipakai adalah executable Windows: `C:\Program Files\Google\Chrome\Application\chrome.exe`
+- Pada Windows, file `.lnk` tidak bisa dipakai sebagai executable; project memanggil file `.exe` secara langsung
+- Untuk override path di environment, bisa pakai `CHROME_BIN`
+
 ## License
 
 Belum ditentukan (TBD).
