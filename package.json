@@ -15,4 +15,9 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
+  ,
+  "dependencies": {
+    "chrome-remote-interface": "^0.31.0",
+    "node-fetch": "^3.3.2"
+  }
 }

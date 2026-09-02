@@ -10,7 +10,7 @@ export type SessionState =
 export interface ChromeLaunchOptions {
   profilePath: string;
   debugPort: number;
-  userDataDir: string;
+  userDataDir?: string;
   sessionId: string;
 }
 

@@ -156,3 +156,62 @@ npx tsx app/cli/index.ts stop demo-session
 ## License
 
 Belum ditentukan (TBD).
+
+## Phase 2 Progress Update
+
+### Status saat ini
+**Phase 2 — CDP Controller** pekerjaan inti untuk mengendalikan Chrome lewat Chrome DevTools Protocol (CDP) telah diimplementasikan dan divalidasi pada level dasar.
+
+Yang sudah berhasil dibuat:
+- `CDP Controller` — koneksi ke CDP, logika reconnect/retry, dan helper untuk `navigate` dan `captureScreenshot`.
+- CLI `cdp` subcommands: `cdp navigate <port> <url>` dan `cdp screenshot <port> [out.png]`.
+- Penanganan readiness endpoint (`/json/version`) sebelum mencoba koneksi CDP.
+- Test E2E dasar untuk CDP Controller (meluncurkan Chrome, navigasi, screenshot, dan cleanup).
+- CLI `status` command untuk melihat session yang tersedia, PID, dan apakah proses berjalan.
+
+### Acceptance criteria Phase 2 (current)
+- [x] koneksi CDP berhasil dan dapat melakukan navigasi dasar
+- [x] screenshot via CDP tersedia
+- [x] reconnect logic saat endpoint belum siap atau koneksi terputus
+- [ ] integrasi CDP ke automation engine (next)
+
+### Cara mencoba fitur Phase 2
+1. Jalankan Chrome session:
+
+```powershell
+npx.cmd tsx app/cli/index.ts launch session1 9222
+```
+
+2. Pastikan endpoint CDP siap:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:9222/json/version | ConvertTo-Json
+```
+
+3. Navigasi melalui CDP dan ambil screenshot:
+
+```powershell
+npx.cmd tsx app/cli/index.ts cdp navigate 9222 https://youtube.com
+npx.cmd tsx app/cli/index.ts cdp screenshot 9222 youtube.png
+```
+#### Hasil Screenshot
+![Hasil screenshoot](img/youtube.png)
+
+4. Periksa status session:
+
+```powershell
+npx.cmd tsx app/cli/index.ts status
+```
+
+5. Hentikan session:
+
+```powershell
+npx.cmd tsx app/cli/index.ts stop session1
+```
+
+Jika Anda menemui masalah dengan menjalankan `npx` pada PowerShell karena kebijakan eksekusi, gunakan `npx.cmd` atau jalankan `node node_modules/tsx/dist/cli.mjs ...`.
+
+### Next steps
+- Dokumentasi lebih lengkap di `docs/automation.md` (akan diperbarui).
+- Integrasi CDP Controller ke automation engine (Phase 2 → Phase 3 work).
+

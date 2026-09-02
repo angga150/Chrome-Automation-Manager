@@ -13,6 +13,6 @@
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["app/**/*.ts", "*.d.ts"],
+  "include": ["app/**/*.ts", "types/**/*.d.ts", "*.d.ts"],
   "exclude": ["dist", "node_modules"]
 }

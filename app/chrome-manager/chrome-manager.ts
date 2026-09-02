@@ -115,12 +115,6 @@ export class ChromeManager {
       '--disable-features=Translate',
       `--profile-directory=${options.sessionId}`,
       'tiktok.com',
-      'tiktok.com',
-      'tiktok.com',
-      'youtube.com',
-      'youtube.com',
-      'youtube.com',
-      
     ];
 
     const commandArgs = scriptPath ? [scriptPath, ...args] : args;
