@@ -5,6 +5,7 @@ import { PortAllocator } from '../port-allocator/port-allocator.js';
 import { ProfileManager } from '../profile-manager/profile-manager.js';
 import { CDPController } from '../cdp-controller/cdp-controller.js';
 import { writeFileSync } from 'node:fs';
+import { runWorkflow } from '../automation/workflow-runner.js';
 
 export async function runCli(): Promise<void> {
   const args = process.argv.slice(2);
@@ -143,6 +144,26 @@ export async function runCli(): Promise<void> {
 
     console.error('Unknown cdp subcommand');
     process.exitCode = 1;
+    return;
+  }
+
+  if (command === 'run') {
+    const wfFile = args[1];
+    const portArg = args[2] ? Number(args[2]) : undefined;
+    if (!wfFile) {
+      console.error('Usage: run <workflow.json|yaml> [port]');
+      process.exitCode = 1;
+      return;
+    }
+
+    try {
+      await runWorkflow(wfFile, portArg);
+      console.log(JSON.stringify({ command: 'run', workflow: wfFile, port: portArg ?? null }, null, 2));
+    } catch (e: any) {
+      console.error('Workflow run failed:', e?.message ?? e);
+      process.exitCode = 1;
+    }
+
     return;
   }
 

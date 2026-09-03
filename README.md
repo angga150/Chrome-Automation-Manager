@@ -215,3 +215,49 @@ Jika Anda menemui masalah dengan menjalankan `npx` pada PowerShell karena kebija
 - Dokumentasi lebih lengkap di `docs/automation.md` (akan diperbarui).
 - Integrasi CDP Controller ke automation engine (Phase 2 → Phase 3 work).
 
+## Phase 3 Progress Update
+
+### Status saat ini
+**Phase 3 — Automation Engine & Workflow Runner** telah diimplementasikan.
+
+Yang sudah berhasil dibuat:
+- `AutomationEngine` — lapisan high-level atas `CDPController` untuk `navigate`, `click`, `type`, `evaluate`, `screenshot`.
+- `workflow-runner` + CLI `run <workflow>` untuk mengeksekusi file JSON/YAML workflow.
+- Recovery dasar: `workflow-runner` dapat mencoba `ChromeManager.restart(sessionId, port)` ketika CDP tidak bisa diakses dan `session` disediakan di workflow.
+- Logging ringan: `app/utils/logger.ts` menulis ke `logs/automation.log`.
+- E2E tests untuk `AutomationEngine` dan `workflow-runner`.
+
+### Acceptance criteria Phase 3
+- [x] automation engine mampu menjalankan langkah dasar (`navigate`, `screenshot`) via CDP
+- [x] workflow-runner dapat mengeksekusi file workflow dan menyimpan output (screenshot)
+- [x] recovery: workflow bisa meminta restart untuk `session` bila endpoint CDP tidak responsif
+
+### Cara mencoba fitur Phase 3
+1. Buat Chrome session (jika ingin recovery otomatis sertakan `session` di workflow):
+
+```powershell
+npx.cmd tsx app/cli/index.ts launch session1 9222
+```
+
+2. Contoh workflow JSON (`workflow.json`):
+
+```json
+{
+  "session": "session1",
+  "port": 9222,
+  "steps": [
+    { "action": "navigate", "url": "https://example.com" },
+    { "action": "screenshot", "out": "example.png" }
+  ]
+}
+```
+
+3. Jalankan workflow:
+
+```powershell
+npx.cmd tsx app/cli/index.ts run workflow.json
+```
+
+4. Periksa `logs/automation.log` untuk catatan operasi dan `example.png` untuk hasil screenshot.
+
+

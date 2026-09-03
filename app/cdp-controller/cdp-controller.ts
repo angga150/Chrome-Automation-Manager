@@ -5,7 +5,8 @@ export class CDPController {
   private client: any | null = null;
   private port: number;
   private readonly maxReconnectAttempts = 20;
-  private readonly reconnectDelayMs = 1000;
+  private readonly reconnectDelayMs = 500;
+  private readonly reconnectDelayCapMs = 30_000;
 
   private constructor(port: number) {
     this.port = port;
@@ -35,8 +36,9 @@ export class CDPController {
     while (attempt < this.maxReconnectAttempts) {
       attempt += 1;
       if (!(await this.isEndpointReady())) {
-        // wait before retrying endpoint readiness
-        await new Promise((r) => setTimeout(r, this.reconnectDelayMs));
+        // exponential backoff before retrying endpoint readiness
+        const delay = Math.min(this.reconnectDelayMs * 2 ** (attempt - 1), this.reconnectDelayCapMs);
+        await new Promise((r) => setTimeout(r, delay));
         continue;
       }
 
@@ -44,8 +46,9 @@ export class CDPController {
         await this.connect();
         return;
       } catch (err) {
-        // wait then retry
-        await new Promise((r) => setTimeout(r, this.reconnectDelayMs * attempt));
+        // exponential backoff with cap then retry
+        const delay = Math.min(this.reconnectDelayMs * 2 ** (attempt - 1), this.reconnectDelayCapMs);
+        await new Promise((r) => setTimeout(r, delay));
       }
     }
 
@@ -97,6 +100,33 @@ export class CDPController {
       const res = await Page.captureScreenshot({ format: options?.format ?? 'png', quality: options?.quality });
       return Buffer.from(res.data, 'base64');
     }
+  }
+
+  async evaluate(expression: string): Promise<any> {
+    await this.ensureConnected();
+    try {
+      const { Runtime } = this.client;
+      await Runtime.enable();
+      const res = await Runtime.evaluate({ expression, returnByValue: true });
+      return res?.result?.value;
+    } catch (err) {
+      this.client = null;
+      await this.ensureConnected();
+      const { Runtime } = this.client;
+      await Runtime.enable();
+      const res = await Runtime.evaluate({ expression, returnByValue: true });
+      return res?.result?.value;
+    }
+  }
+
+  async click(selector: string): Promise<void> {
+    const script = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error('selector not found'); el.click(); return true; })()`;
+    await this.evaluate(script);
+  }
+
+  async type(selector: string, text: string): Promise<void> {
+    const script = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error('selector not found'); el.focus(); el.value = ${JSON.stringify(text)}; el.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`;
+    await this.evaluate(script);
   }
 
   async close(): Promise<void> {

@@ -23,11 +23,11 @@ Setiap fase dirancang agar bisa berdiri sendiri dan menghasilkan sesuatu yang bi
 - **Acceptance criteria**: koneksi CDP pulih otomatis setelah Chrome restart (reconnect logic teruji).
 - **Dependency**: Phase 1.
 
-## Phase 3 — Multi Session
-- **Objective**: Session Manager mengelola banyak session paralel (bukan cuma satu Chrome).
-- **Scope**: state machine session penuh (`CREATED`→...→`STOPPED`), penyimpanan state di SQLite, port/profile allocation yang aman dari race condition.
-- **Expected output**: bisa create/start/stop 5 session sekaligus dari API/CLI.
-- **Acceptance criteria**: 5 session paralel berjalan tanpa profile/port bentrok; crash 1 session tidak mempengaruhi session lain.
+## Phase 3 — Automation Engine & Recovery (Completed)
+- **Objective**: sediakan engine automation tingkat-tinggi untuk menjalankan workflow dan mekanisme recovery dasar.
+- **Scope**: `AutomationEngine` untuk aksi tingkat-tinggi (`navigate`, `click`, `type`, `evaluate`, `screenshot`), `workflow-runner` untuk mengeksekusi file JSON/YAML, dan recovery dasar (restart Chrome untuk `session` ketika CDP tidak merespon).
+- **Expected output**: workflow sederhana (buka URL → screenshot) berjalan via CLI `run` dan recovery dapat melakukan restart Chrome untuk session tertentu.
+- **Acceptance criteria**: workflow dapat dijalankan end-to-end; jika CDP tidak responsif dan workflow mencantumkan `session`, sistem mencoba restart Chrome dan melanjutkan.
 - **Dependency**: Phase 2.
 
 ## Phase 4 — Extension Agent

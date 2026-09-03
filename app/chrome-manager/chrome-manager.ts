@@ -3,6 +3,10 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import type { ChromeLaunchOptions, ChromeProcessInfo } from '../shared/types.js';
+import { ProfileManager } from '../profile-manager/profile-manager.js';
+import { readFile, rm } from 'node:fs/promises';
+import RecoveryManager from '../session/recovery-manager.js';
+import { alert as sendAlert } from '../utils/alerter.js';
 
 export class ChromeManager {
   private static readonly DEFAULT_TIMEOUT_MS = 30000;
@@ -145,5 +149,38 @@ export class ChromeManager {
       userDataDir: options.userDataDir ?? options.profilePath,
       startedAt: new Date(),
     };
+  }
+
+  static async restart(sessionId: string, debugPort: number): Promise<ChromeProcessInfo> {
+    const profileManager = new ProfileManager();
+    const profilePath = profileManager.getProfilePath(sessionId);
+    const pidFile = `${profilePath}.pid`;
+
+    // Check restart limits
+    const can = await RecoveryManager.canRestart(profilePath);
+    if (!can) {
+      await sendAlert(`Restart limit reached for session ${sessionId} (profile ${profilePath}).`);
+      throw new Error('Restart limit reached');
+    }
+
+    try {
+      const pidRaw = await readFile(pidFile, 'utf8');
+      const pid = Number(pidRaw.trim());
+      if (pid && !Number.isNaN(pid)) {
+        await this.stop(pid);
+      }
+    } catch {
+      // ignore missing pid file
+    }
+
+    try {
+      await rm(pidFile, { force: true });
+    } catch {
+      // ignore
+    }
+
+    const info = await this.launch({ profilePath, debugPort, sessionId, userDataDir: profilePath });
+    await RecoveryManager.recordRestart(profilePath);
+    return info;
   }
 }
