@@ -1,6 +1,19 @@
 node_modules/
 dist/
-data/profiles/*
+dashboard/dist/
+dashboard/.vite/
+coverage/
+
+# Runtime-generated browser data
+data/profiles/**
 !data/profiles/.gitkeep
+data/sessions/**
+data/logs/**
+
+# Local environment and generated output
+.env
+.env.*
+*.log
+*.pid
 .DS_Store
 npm-debug.log*

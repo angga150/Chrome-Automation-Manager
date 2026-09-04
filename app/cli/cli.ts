@@ -6,6 +6,11 @@ import { ProfileManager } from '../profile-manager/profile-manager.js';
 import { CDPController } from '../cdp-controller/cdp-controller.js';
 import { writeFileSync } from 'node:fs';
 import { runWorkflow } from '../automation/workflow-runner.js';
+import { MultiAccountQueue, buildTikTokLoginWorkflow, createTikTokSessionConfig } from '../automation/tiktok-workflow.js';
+import TikTokRunner from '../automation/tiktok-runner.js';
+import { TikTokCredentialProvider } from '../automation/tiktok-credential-provider.js';
+import { TikTokScheduler } from '../automation/tiktok-scheduler.js';
+import { TikTokAccountManager } from '../automation/tiktok-account-manager.js';
 
 export async function runCli(): Promise<void> {
   const args = process.argv.slice(2);
@@ -167,6 +172,121 @@ export async function runCli(): Promise<void> {
     return;
   }
 
+  if (command === 'tiktok') {
+    const subcommand = args[1];
+
+    if (subcommand === 'session') {
+      const sessionId = args[2] ?? 'tiktok-session';
+      const username = args[3];
+      const port = args[4] ? Number(args[4]) : undefined;
+      const config = createTikTokSessionConfig(sessionId, username, port);
+      console.log(JSON.stringify({ command: 'tiktok:session', session: config }, null, 2));
+      return;
+    }
+
+    if (subcommand === 'workflow') {
+      const sessionId = args[2] ?? 'tiktok-session';
+      const username = args[3];
+      const workflow = buildTikTokLoginWorkflow(sessionId, username);
+      console.log(JSON.stringify({ command: 'tiktok:workflow', sessionId, username, steps: workflow }, null, 2));
+      return;
+    }
+
+    if (subcommand === 'queue') {
+      const queue = new MultiAccountQueue();
+      const sessionId = args[2] ?? 'tiktok-session';
+      const action = args[3] ?? 'navigate';
+      const payload = args.slice(4).reduce<Record<string, string>>((acc, item) => {
+        const [k, v] = item.split('=');
+        if (k && v) acc[k] = v;
+        return acc;
+      }, {});
+
+      const task = queue.enqueue(sessionId, action, payload);
+      console.log(JSON.stringify({ command: 'tiktok:queue', task }, null, 2));
+      return;
+    }
+
+    if (subcommand === 'run') {
+      const sessionId = args[2] ?? 'tiktok-session';
+      const username = args[3];
+      const port = args[4] ? Number(args[4]) : 9222;
+      const config = createTikTokSessionConfig(sessionId, username, port);
+      const runner = new TikTokRunner(config);
+
+      try {
+        const result = await runner.executeWorkflow(port, { username });
+        console.log(JSON.stringify({ command: 'tiktok:run', result }, null, 2));
+      } catch (e: any) {
+        console.error('TikTok run failed:', e?.message ?? e);
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    if (subcommand === 'credentials') {
+      const provider = new TikTokCredentialProvider();
+      const accountId = args[2] ?? 'default';
+      const username = args[3];
+      const password = args[4];
+      if (username && password) {
+        await provider.storeForAccount(accountId, { username, password });
+      }
+      const resolved = await provider.resolveForAccount(accountId);
+      console.log(JSON.stringify({ command: 'tiktok:credentials', accountId, masked: provider.maskSecrets(resolved) }, null, 2));
+      return;
+    }
+
+    if (subcommand === 'scheduler') {
+      const scheduler = new TikTokScheduler();
+      const accountId = args[2] ?? 'acct-demo';
+      const action = args[3] ?? 'navigate';
+      const task = scheduler.enqueue({ accountId, action, payload: { raw: args.slice(4).join(' ') || 'pending' } });
+      console.log(JSON.stringify({ command: 'tiktok:scheduler', queued: task, pending: scheduler.pendingForAccount(accountId) }, null, 2));
+      return;
+    }
+
+    if (subcommand === 'account') {
+      const manager = new TikTokAccountManager();
+      const accountId = args[2] ?? 'acct-demo';
+      const mode = args[3] ?? 'status';
+
+      if (mode === 'register') {
+        const state = manager.registerAccount(accountId, { status: 'idle' });
+        console.log(JSON.stringify({ command: 'tiktok:account:register', state }, null, 2));
+        return;
+      }
+
+      if (mode === 'enqueue') {
+        const action = args[4] ?? 'navigate';
+        const payload = { raw: args.slice(5).join(' ') || 'pending' };
+        const job = manager.enqueue(accountId, action, payload);
+        console.log(JSON.stringify({ command: 'tiktok:account:enqueue', job, pending: manager.pendingFor(accountId) }, null, 2));
+        return;
+      }
+
+      if (mode === 'process') {
+        const job = manager.processNext(accountId, { status: 'running' });
+        console.log(JSON.stringify({ command: 'tiktok:account:process', job, state: manager.getAccount(accountId) }, null, 2));
+        return;
+      }
+
+      if (mode === 'complete') {
+        const state = manager.complete(accountId, 'success');
+        console.log(JSON.stringify({ command: 'tiktok:account:complete', state }, null, 2));
+        return;
+      }
+
+      const state = manager.getAccount(accountId) ?? manager.registerAccount(accountId, { status: 'idle' });
+      console.log(JSON.stringify({ command: 'tiktok:account:status', state }, null, 2));
+      return;
+    }
+
+    console.error('Usage: tiktok <session|workflow|queue|run|credentials|scheduler|account> ...');
+    process.exitCode = 1;
+    return;
+  }
+
   printHelp();
 }
 
@@ -181,6 +301,15 @@ Usage (from project root):
 CDP helper commands (connect to Chrome debug port):
   npx.cmd tsx app/cli/index.ts cdp navigate <port> <url>    # navigate a running Chrome
   npx.cmd tsx app/cli/index.ts cdp screenshot <port> [out] # capture screenshot
+
+TikTok-oriented commands:
+  npx.cmd tsx app/cli/index.ts tiktok session <sessionId> [username] [port]
+  npx.cmd tsx app/cli/index.ts tiktok workflow <sessionId> [username]
+  npx.cmd tsx app/cli/index.ts tiktok queue <sessionId> [action] [key=value ...]
+  npx.cmd tsx app/cli/index.ts tiktok run <sessionId> [username] [port]
+  npx.cmd tsx app/cli/index.ts tiktok credentials <accountId> [username] [password]
+  npx.cmd tsx app/cli/index.ts tiktok scheduler <accountId> [action] [payload]
+  npx.cmd tsx app/cli/index.ts tiktok account <accountId> [register|enqueue|process|complete|status]
 
 Help:
   npx.cmd tsx app/cli/index.ts help

@@ -120,7 +120,36 @@ export class CDPController {
   }
 
   async click(selector: string): Promise<void> {
-    const script = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error('selector not found'); el.click(); return true; })()`;
+    const script = `(() => {
+      const targetSelector = ${JSON.stringify(selector)};
+      const candidates = [];
+
+      if (targetSelector) {
+        const direct = document.querySelector(targetSelector);
+        if (direct) candidates.push(direct);
+      }
+
+      const fallbackNodes = Array.from(document.querySelectorAll('button, [role="button"], [data-e2e], div'));
+      for (const node of fallbackNodes) {
+        const text = [
+          node.getAttribute('aria-label'),
+          node.getAttribute('title'),
+          node.getAttribute('data-e2e'),
+          node.textContent || '',
+          node.className ? String(node.className) : ''
+        ].join(' ').toLowerCase();
+
+        const isLikeTarget = /like|heart|favorite/i.test(text) && /button|role="button"|data-e2e|like|heart/i.test(String(node.tagName || '') + ' ' + (node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '') + ' ' + (node.getAttribute('data-e2e') || ''));
+        if (isLikeTarget) candidates.push(node);
+      }
+
+      const unique = candidates.filter((node, index, arr) => arr.indexOf(node) === index);
+      const target = unique[0];
+      if (!target) throw new Error('selector not found');
+      target.scrollIntoView({ block: 'center', inline: 'center' });
+      target.click();
+      return true;
+    })()`;
     await this.evaluate(script);
   }
 

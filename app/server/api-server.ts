@@ -1,11 +1,13 @@
 import http from 'node:http';
 import net from 'node:net';
-import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, unlink } from 'node:fs/promises';
 import { appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ChromeManager } from '../chrome-manager/index.js';
 import { ProfileManager } from '../profile-manager/profile-manager.js';
 import { PortAllocator } from '../port-allocator/port-allocator.js';
+import { TikTokOrchestrator } from '../automation/tiktok-orchestrator.js';
+import AutomationEngine from '../automation/automation-engine.js';
 
 // Simple dashboard auth: set DASHBOARD_TOKEN env or data/dashboard-token.txt
 const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN || null;
@@ -14,6 +16,91 @@ let wsBroadcast: ((msg: any) => void) | null = null;
 
 const SESSIONS_DIR = path.join(process.cwd(), 'data', 'sessions');
 const DEFAULT_PORT = Number(process.env.DASHBOARD_PORT ?? 3000);
+const orchestrator = new TikTokOrchestrator();
+
+async function executeQueuedJob(job: { accountId: string; action: string; payload?: Record<string, any> }): Promise<void> {
+  const sessions = await listSessionsFromProfiles();
+  const session = sessions.find((entry) => entry.sessionId === job.accountId);
+  if (!session) throw new Error(`session-not-found:${job.accountId}`);
+
+  const port = Number(session.meta?.port ?? session.meta?.debugPort ?? 9222);
+  if (!Number.isFinite(port) || port <= 0) throw new Error(`port-not-found:${job.accountId}`);
+
+  const url = job.payload?.videoUrl ?? job.payload?.url ?? 'https://www.tiktok.com';
+  const engine = await AutomationEngine.connect(port);
+  try {
+    if (job.action === 'like') {
+      await engine.navigate(url);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+
+      const selectors = [
+        'button[aria-label*="Like"], button[aria-label*="like"], [data-e2e="like-button"]',
+        'button[title*="Like"], button[title*="like"]',
+        'div[role="button"][aria-label*="Like"], div[role="button"][aria-label*="like"]'
+      ];
+
+      let liked = false;
+      for (const selector of selectors) {
+        try {
+          await engine.click(selector);
+          liked = true;
+          break;
+        } catch {
+          // try next selector
+        }
+      }
+
+      if (!liked) {
+        await engine.evaluate(`(() => {
+          const selectors = ${JSON.stringify(selectors)};
+          const matches = [];
+          for (const node of Array.from(document.querySelectorAll('button, [role="button"], [data-e2e], div'))) {
+            const text = [
+              node.getAttribute('aria-label'),
+              node.getAttribute('title'),
+              node.getAttribute('data-e2e'),
+              node.textContent || '',
+              node.className ? String(node.className) : ''
+            ].join(' ').toLowerCase();
+            if (/like|heart|favorite/i.test(text)) matches.push(node);
+          }
+          const target = matches.find((node) => node && typeof node.click === 'function');
+          if (!target) throw new Error('like-button-not-found');
+          target.scrollIntoView({ block: 'center', inline: 'center' });
+          target.click();
+          return true;
+        })()`);
+        liked = true;
+      }
+    } else if (job.action === 'navigate') {
+      await engine.navigate(url);
+    } else {
+      await engine.navigate(url);
+    }
+  } finally {
+    await engine.close();
+  }
+}
+
+async function processQueuedJobs(): Promise<void> {
+  const next = orchestrator.peekNext();
+  if (!next) return;
+
+  const result = await orchestrator.processNext(async (job) => {
+    try {
+      await executeQueuedJob(job);
+      return { ok: true, jobId: job.id, accountId: job.accountId };
+    } catch (error: any) {
+      return { ok: false, accountId: job.accountId, jobId: job.id, error: error?.message ?? String(error) };
+    }
+  });
+
+  if (result && typeof result === 'object' && 'ok' in result && result.ok === true) {
+    orchestrator.complete(String(next.accountId), 'success');
+  } else if (result && typeof result === 'object' && 'ok' in result && result.ok === false) {
+    orchestrator.fail(String(next.accountId), (result as any).error ?? 'job-failed');
+  }
+}
 
 async function isPortFree(port: number): Promise<boolean> {
   return await new Promise((resolve) => {
@@ -74,8 +161,31 @@ async function listSessionsFromProfiles() {
   return sessions;
 }
 
+function registerSessionAccounts(sessions: any[]) {
+  for (const session of sessions) {
+    const accountId = String(session.sessionId || 'default-session');
+    orchestrator.registerAccount(accountId, {
+      status: session.pid ? 'running' : 'idle',
+      updatedAt: new Date().toISOString(),
+      lastError: undefined,
+      queue: orchestrator.accountSnapshot(accountId)?.queue ?? [],
+    });
+  }
+}
+
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   const url = new URL(req.url || '', `http://localhost`);
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-token');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   // write request log for debugging
   try {
     await mkdir(path.join(process.cwd(), 'data', 'logs'), { recursive: true }).catch(() => {});
@@ -94,13 +204,66 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
   if (req.method === 'GET' && url.pathname === '/sessions') {
     const sessions = await listSessionsFromProfiles();
+    registerSessionAccounts(sessions);
     return json(res, 200, { ok: true, sessions });
   }
 
   if (req.method === 'GET' && url.pathname === '/metrics') {
     const sessions = await listSessionsFromProfiles();
+    registerSessionAccounts(sessions);
     const running = sessions.filter((s) => s.pid).length;
-    return json(res, 200, { ok: true, metrics: { session_count: sessions.length, running_sessions: running } });
+    const accounts = orchestrator.snapshot();
+    return json(res, 200, { ok: true, metrics: { session_count: sessions.length, running_sessions: running, account_count: accounts.length, running_accounts: accounts.filter((account) => account.status === 'running').length } });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/queue') {
+    const queue = orchestrator.snapshot().flatMap((account) => account.queue.map((job) => ({ ...job, accountStatus: account.status })));
+    return json(res, 200, { ok: true, queue });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/accounts') {
+    const sessions = await listSessionsFromProfiles();
+    registerSessionAccounts(sessions);
+    const accounts = orchestrator.snapshot();
+    return json(res, 200, { ok: true, accounts });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/jobs/bulk') {
+    try {
+      const body: Buffer[] = [];
+      for await (const chunk of req) body.push(chunk as Buffer);
+      const data = body.length ? JSON.parse(Buffer.concat(body).toString('utf8')) : {};
+      const action = data.action ?? 'like';
+      const videoUrl = data.videoUrl ?? data.url ?? data.payload?.url ?? null;
+      const accountIds = Array.isArray(data.accountIds) && data.accountIds.length > 0 ? data.accountIds : (await listSessionsFromProfiles()).map((session) => session.sessionId);
+      const jobs = accountIds.map((accountId: string) => orchestrator.enqueue(String(accountId), action, { url: videoUrl, videoUrl, raw: data.payload ?? {} }));
+      return json(res, 200, { ok: true, action, videoUrl, accountIds, jobs });
+    } catch (e: any) {
+      return json(res, 500, { ok: false, reason: String(e) });
+    }
+  }
+
+  const matchAccount = url.pathname.match(/^\/accounts\/([^\/]+)$/);
+  if (req.method === 'GET' && matchAccount) {
+    const accountId = matchAccount[1];
+    const state = orchestrator.accountSnapshot(accountId) ?? { accountId, status: 'idle', queue: [], updatedAt: new Date().toISOString() };
+    return json(res, 200, { ok: true, account: state });
+  }
+
+  const matchAccountJobs = url.pathname.match(/^\/accounts\/([^\/]+)\/jobs$/);
+  if (req.method === 'POST' && matchAccountJobs) {
+    const accountId = matchAccountJobs[1];
+    try {
+      const body: Buffer[] = [];
+      for await (const chunk of req) body.push(chunk as Buffer);
+      const data = body.length ? JSON.parse(Buffer.concat(body).toString('utf8')) : {};
+      const action = data.action ?? 'navigate';
+      const payload = data.payload ?? data ?? {};
+      const job = orchestrator.enqueue(accountId, action, payload);
+      return json(res, 200, { ok: true, job });
+    } catch (e: any) {
+      return json(res, 500, { ok: false, reason: String(e) });
+    }
   }
 
   const matchStart = url.pathname.match(/^\/sessions\/([^\/]+)\/start$/);
@@ -145,7 +308,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       try { const raw = await readFile(`${profilePath}.pid`, 'utf8'); pid = Number(raw.trim()); } catch {}
       if (!pid) return json(res, 400, { ok: false, reason: 'no-running-process' });
       const stopped = await ChromeManager.stop(pid);
-      try { await writeSessionFile(sessionId, { pid: null }); } catch {}
+      try { await unlink(`${profilePath}.pid`); } catch {}
+      try { await writeSessionFile(sessionId, { pid: null, stoppedAt: new Date().toISOString() }); } catch {}
       if (wsBroadcast) wsBroadcast({ type: 'session_stopped', sessionId, stopped });
       return json(res, 200, { ok: true, stopped });
     } catch (e: any) {
@@ -181,6 +345,11 @@ async function main() {
   }
 
   const server = http.createServer(handleRequest);
+  const queueLoop = setInterval(() => {
+    void processQueuedJobs();
+  }, 4000);
+
+  server.on('close', () => clearInterval(queueLoop));
   server.on('error', (err: any) => {
     if (err && err.code === 'EADDRINUSE') {
       console.error('Dashboard API failed to start: port already in use', activePort);

@@ -97,7 +97,9 @@ Proyek ini ditujukan untuk automation dan testing yang sah (mengendalikan browse
 
 ## Project Status
 
-**Phase 0 — Documentation & Architecture.** Belum ada implementasi kode; fondasi desain sedang difinalisasi sebelum development dimulai.
+**Phase 5 — Dashboard + Multi-Account Control Plane (MVP active).**
+
+Saat ini proyek sudah melampaui fondasi launcher dan CDP, dan masuk ke fase kontrol panel operasional: dashboard lokal untuk memantau sesi Chrome, akun yang terdaftar, serta job queue untuk aksi massal seperti like video pada TikTok. Fase ini berfokus pada menyiapkan satu titik kendali dari UI tanpa harus menjalankan CLI untuk setiap aktivitas.
 
 ## Phase 1 Progress Update
 
@@ -271,7 +273,7 @@ Yang sudah berhasil dibuat:
 - Validasi `HMAC` + `nonce` pada saat registrasi agar request tidak bisa dipalsukan.
 - Penyesuaian kompatibilitas runtime agar extension tidak gagal karena `process`, `window`, atau global Node yang tidak tersedia di browser extension.
 - Command queue yang disimpan dan diproses berulang sampai ACK diterima.
-- Mode `DASHBOARD_DRY_RUN=true` untuk menguji lifecycle session tanpa harus menjalankan Chrome secara nyata.
+- Mode default adalah Chrome runtime nyata; gunakan `npm run dev:api:dry` atau `DASHBOARD_DRY_RUN=true` hanya bila ingin menguji lifecycle session tanpa menjalankan browser sebenaranya.
 
 ### Acceptance criteria Phase 4
 - [x] extension dapat melakukan registrasi ke server lokal
@@ -282,6 +284,45 @@ Yang sudah berhasil dibuat:
 
 ### Catatan penting
 Phase 4 sudah cukup kuat untuk menjadi dasar sebelum masuk ke Phase 5 (dashboard UI). Namun, ini masih merupakan implementasi MVP agent. Fitur page-level action dan recovery lanjutan tetap perlu diuji dan diperkuat sebelum dianggap siap untuk produksi multi-account.
+
+## Phase 5 Progress Update
+
+### Status saat ini
+**Phase 5 — Dashboard UI + Multi-Account Orchestration** telah mencapai MVP operasional yang dapat memonitor session, melihat akun yang terdaftar, dan mengirim job massal dari dashboard menuju runtime browser yang aktif.
+
+Yang sudah berhasil dibuat:
+- dashboard React + Vite dengan layout monitoring untuk session, akun, dan metrics
+- API lokal di `app/server/api-server.ts` yang menyediakan endpoint utama: `/health`, `/sessions`, `/metrics`, `/accounts`, `/jobs/bulk`, dan job detail per session
+- daftar session dengan status `RUNNING` / `STOPPED` lengkap dengan PID, metadata, dan path profile
+- tombol `Start` dan `Stop` dari UI untuk mengontrol lifecycle Chrome session
+- panel detail session dan ringkasan metrics untuk observability
+- alur akun TikTok yang bisa didaftarkan dan dijadwalkan untuk job seperti `like` dari dashboard
+- queue worker yang memproses job berurutan dan mengirim aksi ke session browser yang sesuai
+- bulk action `like` menggunakan URL video dari dashboard untuk semua akun yang terdaftar
+- mode runtime nyata (`Chrome` actual) sebagai default; mode dry-run hanya untuk validasi non-browser jika dibutuhkan
+
+### Acceptance criteria Phase 5
+- [x] dashboard dapat menampilkan ringkasan status dari Application Core
+- [x] daftar session tampil dan dapat di-refresh secara berkala
+- [x] user dapat memulai atau menghentikan session dari UI
+- [x] panel detail menampilkan metadata session yang relevan
+- [x] dashboard dapat mengirim aksi bulk seperti `like` ke banyak session/account
+- [x] queue dan job tracker tersedia di sisi backend untuk operasi multi-account
+- [ ] validasi selector DOM final untuk tombol Like TikTok di browser nyata masih merupakan fokus pengujian lanjutan pada page yang benar-benar aktif
+
+### Cara menjalankan Phase 5
+```powershell
+cd C:\laragon\www\Chrome Automation
+npm install
+npm run dev
+```
+
+Command di atas akan menyalakan API local dan dashboard frontend secara bersamaan. Dashboard default akan terhubung ke API di `http://127.0.0.1:3015`.
+
+### Catatan penting
+Phase 5 saat ini berfungsi sebagai kontrol plane lokal untuk operasi multi-session dan multi-account. Ini sudah cukup kuat sebagai fondasi langsung menuju fase selanjutnya: workflow automation yang lebih kaya, emulasi device, dan pemantauan runtime yang lebih lengkap.
+
+> Fokus utama yang masih perlu diverifikasi pada lingkungan nyata adalah selector Like TikTok yang stabil di halaman live, karena ini memengaruhi eksekusi aksi `like` di semua akun secara otomatis.
 
 ---
 

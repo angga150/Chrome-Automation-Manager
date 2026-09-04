@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- feat: Phase 5 — Dashboard MVP
+  - React + Vite dashboard for session overview and lifecycle control
+  - live stats cards for total/running session counts
+  - session list with start/stop actions and detail panel
+  - backend CORS support for local dashboard to API connectivity
+  - dev proxy configuration for local dashboard runtime
+
 - feat: Phase 4 — Extension Agent
   - service worker/background update for Manifest V3 compatibility
   - agent registration flow with heartbeat and challenge validation
