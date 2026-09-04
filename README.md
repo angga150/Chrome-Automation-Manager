@@ -260,4 +260,29 @@ npx.cmd tsx app/cli/index.ts run workflow.json
 
 4. Periksa `logs/automation.log` untuk catatan operasi dan `example.png` untuk hasil screenshot.
 
+## Phase 4 Progress Update
+
+### Status saat ini
+**Phase 4 — Extension Agent** telah dibangun pada level implementasi awal dan siap menjadi fondasi untuk dashboard dan operasi page-level.
+
+Yang sudah berhasil dibuat:
+- `Extension Agent` berbasis Manifest V3 dengan background/service worker yang kompatibel dengan runtime Chrome extension.
+- Protokol agent untuk registrasi, heartbeat, queue command, dan ACK/retry antara extension dan Application Core.
+- Validasi `HMAC` + `nonce` pada saat registrasi agar request tidak bisa dipalsukan.
+- Penyesuaian kompatibilitas runtime agar extension tidak gagal karena `process`, `window`, atau global Node yang tidak tersedia di browser extension.
+- Command queue yang disimpan dan diproses berulang sampai ACK diterima.
+- Mode `DASHBOARD_DRY_RUN=true` untuk menguji lifecycle session tanpa harus menjalankan Chrome secara nyata.
+
+### Acceptance criteria Phase 4
+- [x] extension dapat melakukan registrasi ke server lokal
+- [x] koneksi session dapat dipantau via heartbeat
+- [x] command queue dan retry/ACK didukung
+- [x] kode aman terhadap runtime Chrome extension yang tidak memiliki globals Node
+- [ ] validasi full end-to-end pada browser nyata untuk page-level action masih perlu pengujian lanjutan di lingkungan nyata
+
+### Catatan penting
+Phase 4 sudah cukup kuat untuk menjadi dasar sebelum masuk ke Phase 5 (dashboard UI). Namun, ini masih merupakan implementasi MVP agent. Fitur page-level action dan recovery lanjutan tetap perlu diuji dan diperkuat sebelum dianggap siap untuk produksi multi-account.
+
+---
+
 

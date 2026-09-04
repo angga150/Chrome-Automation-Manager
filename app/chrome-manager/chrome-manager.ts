@@ -72,6 +72,7 @@ export class ChromeManager {
   static findChromeBinary(): string {
     const configured = process.env.CHROME_BIN ?? process.env.CHROME_PATH;
     if (configured && configured.trim()) {
+      console.log('ChromeManager: using configured CHROME_BIN/CHROME_PATH =>', configured.trim());
       return configured.trim();
     }
 
@@ -92,6 +93,7 @@ export class ChromeManager {
     for (const candidate of candidates) {
       if (process.platform === 'win32') {
         if (existsSync(candidate)) {
+          console.log('ChromeManager: found chrome binary at', candidate);
           return candidate;
         }
         continue;
@@ -103,6 +105,7 @@ export class ChromeManager {
       }
     }
 
+    console.error('ChromeManager: no chrome binary found; tried candidates=', candidates);
     throw new Error('Google Chrome or Chromium binary not found on PATH. Set CHROME_BIN or CHROME_PATH to a valid browser executable.');
   }
 
@@ -130,12 +133,15 @@ export class ChromeManager {
     });
 
     const pid = child.pid;
+    console.log('ChromeManager: spawned child pid=', pid, 'binary=', chromeBinary);
     if (!pid) {
+      console.error('ChromeManager: spawn failed, commandArgs=', commandArgs.slice(0, 6));
       throw new Error('Failed to spawn Chrome process');
     }
 
     const ready = await this.waitUntilReady(options.debugPort);
     if (!ready) {
+      console.error('ChromeManager: chrome process did not become ready on port', options.debugPort);
       await this.stop(pid);
       throw new Error(`Chrome failed to start on port ${options.debugPort}`);
     }

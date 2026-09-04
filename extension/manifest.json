@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Chrome Automation Agent",
+  "version": "0.1.0",
+  "description": "Extension agent to receive automation commands from the local automation server.",
+  "permissions": ["scripting", "tabs", "storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": ["<all_urls>"],
+  "action": {}
+}

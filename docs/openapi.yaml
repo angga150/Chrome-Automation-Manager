@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: Chrome Automation Manager API
+  version: '0.1.0'
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /sessions:
+    get:
+      summary: List sessions (profiles)
+      responses:
+        '200':
+          description: Session list
+  /sessions/{id}:
+    get:
+      summary: Get session detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session detail
+  /sessions/{id}/start:
+    post:
+      summary: Start a session (launch Chrome)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                port:
+                  type: integer
+      responses:
+        '200':
+          description: Started
+  /sessions/{id}/stop:
+    post:
+      summary: Stop a running session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stopped
+  /metrics:
+    get:
+      summary: Basic metrics
+      responses:
+        '200':
+          description: Metrics JSON
+components:
+  securitySchemes:
+    DashboardToken:
+      type: apiKey
+      in: header
+      name: x-dashboard-token
+security:
+  - DashboardToken: []

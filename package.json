@@ -12,12 +12,13 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
-  }
-  ,
+  },
   "dependencies": {
     "chrome-remote-interface": "^0.31.0",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "ws": "^8.21.3"
   }
 }
